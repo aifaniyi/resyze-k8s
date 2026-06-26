@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resyze-analytics
+  namespace: resyze
+  labels:
+    app: resyze-analytics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resyze-analytics
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: resyze-analytics
+    spec:
+      imagePullSecrets:
+        - name: registry-secret
+      containers:
+        - name: resyze-analytics
+          image: nexus.aoilabs.net:8443/aifaniyi/resyze-analytics:9
+          ports:
+            - containerPort: 8082
+          env:
+            - name: RESYZE_ANALYTICS_PORT
+              value: "8082"
+
+            # NATS — resolved from the kubernetes service env vars injected by kubernetes
+            - name: NATS_URL
+              value: "nats://$(NATS_SERVICE_HOST):$(NATS_SERVICE_PORT_CLIENT)"
+            - name: NATS_ANALYTICS_STREAM
+              value: "ANALYTICS"
+            - name: NATS_ANALYTICS_SUBJECT
+              value: "analytics.events"
+            - name: NATS_ANALYTICS_CONSUMER
+              value: "analytics-consumer"
+            - name: NATS_ANALYTICS_DLQ_SUBJECT
+              value: "analytics.events.dlq"
+
+            # Elasticsearch — resolved from the kubernetes service env vars injected by kubernetes
+            - name: ELASTICSEARCH_URL
+              value: "http://$(ELASTICSEARCH_SERVICE_HOST):$(ELASTICSEARCH_SERVICE_PORT_HTTP)"
+            - name: ELASTICSEARCH_INDEX
+              value: "resyze-analytics"
+
+            - name: CORS_ALLOWED_ORIGINS
+              value: "https://resyze.aoilabs.net"
+
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: resyze-api-secret
+                  key: JWT_SECRET
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: resyze-analytics
+  namespace: resyze
+spec:
+  selector:
+    app: resyze-analytics
+  ports:
+    - port: 8082
+      targetPort: 8082

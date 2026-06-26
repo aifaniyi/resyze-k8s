@@ -1,0 +1,157 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resyze-api
+  namespace: resyze
+  labels:
+    app: resyze-api
+spec:
+  replicas: 2 # Run 2 replicas across the 3 nodes for basic HA
+  selector:
+    matchLabels:
+      app: resyze-api
+  # Replace pods one at a time so there is no downtime during rollouts.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: resyze-api
+    spec:
+      imagePullSecrets:
+        - name: registry-secret
+      containers:
+        - name: resyze-api
+          image: nexus.aoilabs.net:8443/aifaniyi/resyze-api:22
+          ports:
+            - containerPort: 8081
+          env:
+            - name: RESYZE_API_PORT
+              value: "8081"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: RESYZE_HOSTNAME
+              value: "resyze.aoilabs.net"
+            - name: CDN_BASE_URL
+              value: "https://resyze.aoilabs.net/cdn"
+
+            # Postgres — resolved from the kubernetes service env vars injected by kubernetes
+            - name: POSTGRES_HOST
+              value: "$(POSTGRES_SERVICE_HOST)"
+            - name: POSTGRES_PORT
+              value: "$(POSTGRES_SERVICE_PORT)"
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+
+            # JWT
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: resyze-api-secret
+                  key: JWT_SECRET
+            - name: JWT_EXPIRY
+              value: "12h"
+
+            # AWS S3
+            - name: AWS_REGION
+              value: "eu-west-3"
+            - name: S3_BUCKET
+              value: "resyze-images"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: resyze-api-secret
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: resyze-api-secret
+                  key: AWS_SECRET_ACCESS_KEY
+
+            # NATS — resolved from the kubernetes service env vars injected by kubernetes
+            - name: NATS_URL
+              value: "nats://$(NATS_SERVICE_HOST):$(NATS_SERVICE_PORT_CLIENT)"
+            - name: NATS_ANALYTICS_STREAM
+              value: "ANALYTICS"
+            - name: NATS_ANALYTICS_SUBJECT
+              value: "analytics.events"
+            - name: NATS_ANALYTICS_CONSUMER
+              value: "api-analytics-publisher"
+            - name: NATS_ANALYTICS_DLQ_SUBJECT
+              value: "analytics.events.dlq"
+            - name: NATS_EMAIL_STREAM
+              value: "EMAIL"
+            - name: NATS_EMAIL_SUBJECT
+              value: "email.events"
+            - name: NATS_EMAIL_CONSUMER
+              value: "api-email-publisher"
+            - name: NATS_EMAIL_DLQ_SUBJECT
+              value: "email.events.dlq"
+
+            # Analytics — resolved from the kubernetes service env vars injected by kubernetes
+            - name: ANALYTICS_SERVICE_URL
+              value: "http://$(RESYZE_ANALYTICS_SERVICE_HOST):$(RESYZE_ANALYTICS_SERVICE_PORT)"
+
+            # In-memory LRU cache ceiling
+            - name: CACHE_MAX_SIZE_MB
+              value: "512"
+
+            - name: CORS_ALLOWED_ORIGINS
+              value: "https://resyze.aoilabs.net"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1024Mi
+          volumeMounts:
+            - name: cache
+              mountPath: /app/cache
+      volumes:
+        - name: cache
+          emptyDir:
+            sizeLimit: 4Gi
+
+---
+# ClusterIP service — traffic comes in via the Ingress, not directly.
+apiVersion: v1
+kind: Service
+metadata:
+  name: resyze-api
+  namespace: resyze
+spec:
+  selector:
+    app: resyze-api
+  ports:
+    - port: 8081
+      targetPort: 8081

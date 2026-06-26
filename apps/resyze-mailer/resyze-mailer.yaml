@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resyze-mailer
+  namespace: resyze
+  labels:
+    app: resyze-mailer
+spec:
+  # Single replica — the mailer is a NATS consumer and does not handle HTTP traffic directly.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resyze-mailer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: resyze-mailer
+    spec:
+      imagePullSecrets:
+        - name: registry-secret
+      containers:
+        - name: resyze-mailer
+          image: nexus.aoilabs.net:8443/aifaniyi/resyze-mailer:3
+          ports:
+            - containerPort: 8083
+          env:
+            - name: RESYZE_MAILER_PORT
+              value: "8083"
+
+            # NATS — resolved from the kubernetes service env vars injected by kubernetes
+            - name: NATS_URL
+              value: "nats://$(NATS_SERVICE_HOST):$(NATS_SERVICE_PORT_CLIENT)"
+            - name: NATS_MAILER_STREAM
+              value: "EMAIL"
+            - name: NATS_MAILER_SUBJECT
+              value: "email.events"
+            - name: NATS_MAILER_CONSUMER
+              value: "mailer-consumer"
+            - name: NATS_MAILER_DLQ_SUBJECT
+              value: "email.events.dlq"
+
+            # SMTP — host/port from deployment/.env; credentials from secret
+            - name: SMTP_HOST
+              value: "smtp.hostinger.com"
+            - name: SMTP_PORT
+              value: "587"
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: resyze-mailer-secret
+                  key: SMTP_FROM
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: resyze-mailer-secret
+                  key: SMTP_USERNAME
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: resyze-mailer-secret
+                  key: SMTP_PASSWORD
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: resyze-mailer
+  namespace: resyze
+spec:
+  selector:
+    app: resyze-mailer
+  ports:
+    - port: 8083
+      targetPort: 8083

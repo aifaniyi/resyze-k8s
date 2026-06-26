@@ -1,0 +1,91 @@
+# k3s ships with Traefik as the default ingress controller.
+# This Ingress terminates TLS using a cert-manager certificate and routes:
+#   /api/analytics/* → resyze-analytics:8082
+#   /api/*            → resyze-api:8081
+#   /cdn/*            → resyze-api:8081
+#   /thumbnail/*      → resyze-api:8081
+#   /docs/*           → resyze-api:8081
+#   /*                → resyze-app:80    (SPA catch-all)
+#
+# Prerequisites:
+#   - cert-manager installed in the cluster
+#   - A ClusterIssuer named "letsencrypt-prod" configured with your email
+#   - DNS A records for resyze.aoilabs.net pointing to your node IPs
+#
+# Install cert-manager:
+#   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: resyze-ingress
+  namespace: resyze
+  annotations:
+    # Instruct Traefik to redirect all HTTP traffic to HTTPS.
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # cert-manager will provision and renew the TLS certificate automatically.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - resyze.aoilabs.net
+      # cert-manager stores the issued certificate in this secret.
+      secretName: resyze-tls
+  rules:
+    - host: resyze.aoilabs.net
+      http:
+        paths:
+          # Analytics API routes — must be before /api to avoid being swallowed
+          - path: /api/analytics
+            pathType: Prefix
+            backend:
+              service:
+                name: resyze-analytics
+                port:
+                  number: 8082
+
+          # API routes — matched before the catch-all
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: resyze-api
+                port:
+                  number: 8081
+
+          # CDN transform endpoint
+          - path: /cdn
+            pathType: Prefix
+            backend:
+              service:
+                name: resyze-api
+                port:
+                  number: 8081
+
+          # Thumbnail endpoint
+          - path: /thumbnail
+            pathType: Prefix
+            backend:
+              service:
+                name: resyze-api
+                port:
+                  number: 8081
+
+          # API docs
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: resyze-api
+                port:
+                  number: 8081
+
+          # SPA catch-all — must be last
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: resyze-app
+                port:
+                  number: 80
+
