@@ -149,6 +149,8 @@ kind: Service
 metadata:
   name: resyze-api
   namespace: resyze
+  labels:
+    app: resyze-api
 spec:
   selector:
     app: resyze-api
