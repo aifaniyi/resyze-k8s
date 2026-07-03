@@ -20,12 +20,16 @@ spec:
     metadata:
       labels:
         app: resyze-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/metrics"
     spec:
       imagePullSecrets:
         - name: registry-secret
       containers:
         - name: resyze-api
-          image: nexus.aoilabs.net:8443/aifaniyi/resyze-api:22
+          image: nexus.aoilabs.net:8443/aifaniyi/resyze-api:23
           ports:
             - containerPort: 8081
           env:
