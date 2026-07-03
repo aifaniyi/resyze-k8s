@@ -20,10 +20,6 @@ spec:
     metadata:
       labels:
         app: resyze-api
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8081"
-        prometheus.io/path: "/metrics"
     spec:
       imagePullSecrets:
         - name: registry-secret
@@ -157,5 +153,6 @@ spec:
   selector:
     app: resyze-api
   ports:
-    - port: 8081
+    - name: http
+      port: 8081
       targetPort: 8081
