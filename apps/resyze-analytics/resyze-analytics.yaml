@@ -24,7 +24,7 @@ spec:
         - name: registry-secret
       containers:
         - name: resyze-analytics
-          image: nexus.aoilabs.net:8443/aifaniyi/resyze-analytics:9
+          image: nexus.aoilabs.net:8443/aifaniyi/resyze-analytics:10
           ports:
             - containerPort: 8082
           env:
@@ -84,9 +84,12 @@ kind: Service
 metadata:
   name: resyze-analytics
   namespace: resyze
+  labels:
+    app: resyze-analytics
 spec:
   selector:
     app: resyze-analytics
   ports:
-    - port: 8082
+    - name: http
+      port: 8082
       targetPort: 8082
