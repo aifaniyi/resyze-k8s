@@ -25,7 +25,7 @@ spec:
         - name: registry-secret
       containers:
         - name: resyze-mailer
-          image: nexus.aoilabs.net:8443/aifaniyi/resyze-mailer:5
+          image: nexus.aoilabs.net:8443/aifaniyi/resyze-mailer:7
           ports:
             - containerPort: 8083
           env:

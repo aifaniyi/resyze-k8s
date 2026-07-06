@@ -1,0 +1,101 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: resyze-api-alerts
+  namespace: resyze
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: resyze-api.rules
+      rules:
+        # High HTTP error rate (>5% 5xx responses over 5 minutes)
+        - alert: ResyzeApiHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="resyze-api", status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job="resyze-api"}[5m]))
+            ) > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            service: resyze-api
+          annotations:
+            summary: "resyze-api high error rate"
+            description: "resyze-api 5xx error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+        # High request latency (p95 > 2s over 5 minutes)
+        - alert: ResyzeApiHighLatency
+          expr: |
+            histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="resyze-api"}[5m])) by (le))
+            > 2
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-api
+          annotations:
+            summary: "resyze-api high latency"
+            description: "resyze-api p95 latency is {{ $value | humanizeDuration }}."
+
+        # Service down (no successful health checks)
+        - alert: ResyzeApiDown
+          expr: up{job="resyze-api"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            service: resyze-api
+          annotations:
+            summary: "resyze-api is down"
+            description: "resyze-api has been unreachable for more than 1 minute."
+
+        # High image transformation failure rate
+        - alert: ResyzeApiImageTransformErrors
+          expr: |
+            sum(rate(image_uploads_total{job="resyze-api", status="error"}[5m]))
+            /
+            sum(rate(image_uploads_total{job="resyze-api"}[5m]))
+            > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-api
+          annotations:
+            summary: "resyze-api high image transform failure rate"
+            description: "Image upload/transform error rate is {{ $value | humanizePercentage }}."
+
+        # S3 errors
+        - alert: ResyzeApiS3Errors
+          expr: |
+            sum(rate(s3_requests_total{job="resyze-api", status="error"}[5m]))
+            > 0.5
+          for: 3m
+          labels:
+            severity: critical
+            service: resyze-api
+          annotations:
+            summary: "resyze-api S3 errors"
+            description: "S3 error rate is {{ $value }} req/s."
+
+        # NATS publish failures
+        - alert: ResyzeApiNATSPublishErrors
+          expr: rate(nats_publish_errors_total{job="resyze-api"}[5m]) > 0
+          for: 2m
+          labels:
+            severity: warning
+            service: resyze-api
+          annotations:
+            summary: "resyze-api NATS publish errors"
+            description: "NATS publish errors detected at {{ $value }} errors/s."
+
+        # High failed login attempts (possible brute force)
+        - alert: ResyzeApiHighFailedLogins
+          expr: |
+            sum(rate(auth_login_attempts_total{job="resyze-api", status="failure"}[5m])) > 1
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-api
+          annotations:
+            summary: "resyze-api high failed login rate"
+            description: "Failed login rate is {{ $value }} attempts/s — possible brute force."

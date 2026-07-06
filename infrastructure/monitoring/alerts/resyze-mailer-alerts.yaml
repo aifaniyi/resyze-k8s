@@ -1,0 +1,86 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: resyze-mailer-alerts
+  namespace: resyze
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: resyze-mailer.rules
+      rules:
+        # Service down
+        - alert: ResyzeMailerDown
+          expr: up{job="resyze-mailer"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            service: resyze-mailer
+          annotations:
+            summary: "resyze-mailer is down"
+            description: "resyze-mailer has been unreachable for more than 1 minute."
+
+        # High email send failure rate
+        - alert: ResyzeMailerHighFailureRate
+          expr: |
+            sum(rate(emails_sent_total{job="resyze-mailer", status="error"}[5m]))
+            /
+            sum(rate(emails_sent_total{job="resyze-mailer"}[5m]))
+            > 0.1
+          for: 5m
+          labels:
+            severity: critical
+            service: resyze-mailer
+          annotations:
+            summary: "resyze-mailer high email failure rate"
+            description: "Email send failure rate is {{ $value | humanizePercentage }}."
+
+        # DLQ messages increasing
+        - alert: ResyzeMailerDLQGrowing
+          expr: rate(nats_dlq_total{job="resyze-mailer"}[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-mailer
+          annotations:
+            summary: "resyze-mailer DLQ messages increasing"
+            description: "Messages are being sent to DLQ at {{ $value }} msg/s."
+
+        # High NATS consumer failure rate
+        - alert: ResyzeMailerNATSConsumerErrors
+          expr: |
+            sum(rate(nats_messages_consumed_total{job="resyze-mailer", status="error"}[5m]))
+            /
+            sum(rate(nats_messages_consumed_total{job="resyze-mailer"}[5m]))
+            > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-mailer
+          annotations:
+            summary: "resyze-mailer high NATS consumer error rate"
+            description: "NATS message processing error rate is {{ $value | humanizePercentage }}."
+
+        # High email send latency
+        - alert: ResyzeMailerSlowSends
+          expr: |
+            histogram_quantile(0.95, sum(rate(email_send_duration_seconds_bucket{job="resyze-mailer"}[5m])) by (le))
+            > 10
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-mailer
+          annotations:
+            summary: "resyze-mailer slow email sends"
+            description: "p95 email send duration is {{ $value | humanizeDuration }}."
+
+        # High retry rate
+        - alert: ResyzeMailerHighRetries
+          expr: rate(email_retries_total{job="resyze-mailer"}[5m]) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-mailer
+          annotations:
+            summary: "resyze-mailer high retry rate"
+            description: "Email retry rate is {{ $value }} retries/s — SMTP may be degraded."

@@ -1,0 +1,38 @@
+# Grafana Contact Point & Notification Policy for Triage Agent
+#
+# This configures Grafana to send alert notifications to the resyze-triage-agent
+# webhook endpoint. Apply via Grafana provisioning or the Grafana API.
+#
+# Place this file in your Grafana provisioning directory:
+#   /etc/grafana/provisioning/alerting/
+#
+# Or apply via Grafana API (see README for curl examples).
+
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: resyze-triage-agent
+    receivers:
+      - uid: triage-agent-webhook
+        type: webhook
+        settings:
+          url: http://resyze-triage-agent.resyze.svc.cluster.local:8090/webhook/alert
+          httpMethod: POST
+          maxAlerts: 10
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: resyze-triage-agent
+    group_by:
+      - alertname
+      - service
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: resyze-triage-agent
+        matchers:
+          - service =~ "resyze-.*"
+        continue: false

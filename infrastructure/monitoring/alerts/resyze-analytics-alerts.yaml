@@ -1,0 +1,88 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: resyze-analytics-alerts
+  namespace: resyze
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: resyze-analytics.rules
+      rules:
+        # Service down
+        - alert: ResyzeAnalyticsDown
+          expr: up{job="resyze-analytics"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            service: resyze-analytics
+          annotations:
+            summary: "resyze-analytics is down"
+            description: "resyze-analytics has been unreachable for more than 1 minute."
+
+        # High NATS consumer failure rate
+        - alert: ResyzeAnalyticsNATSConsumerErrors
+          expr: |
+            sum(rate(nats_messages_consumed_total{job="resyze-analytics", status="error"}[5m]))
+            /
+            sum(rate(nats_messages_consumed_total{job="resyze-analytics"}[5m]))
+            > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-analytics
+          annotations:
+            summary: "resyze-analytics high NATS consumer error rate"
+            description: "NATS message processing error rate is {{ $value | humanizePercentage }}."
+
+        # DLQ messages increasing
+        - alert: ResyzeAnalyticsDLQGrowing
+          expr: rate(nats_dlq_total{job="resyze-analytics"}[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-analytics
+          annotations:
+            summary: "resyze-analytics DLQ messages increasing"
+            description: "Messages are being sent to DLQ at {{ $value }} msg/s."
+
+        # Elasticsearch errors
+        - alert: ResyzeAnalyticsESErrors
+          expr: |
+            sum(rate(elasticsearch_requests_total{job="resyze-analytics", status="error"}[5m]))
+            > 0.5
+          for: 3m
+          labels:
+            severity: critical
+            service: resyze-analytics
+          annotations:
+            summary: "resyze-analytics Elasticsearch errors"
+            description: "Elasticsearch error rate is {{ $value }} req/s."
+
+        # Batch flush failures
+        - alert: ResyzeAnalyticsBatchFlushErrors
+          expr: |
+            sum(rate(batch_flush_total{job="resyze-analytics", status="error"}[5m]))
+            /
+            sum(rate(batch_flush_total{job="resyze-analytics"}[5m]))
+            > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-analytics
+          annotations:
+            summary: "resyze-analytics batch flush failures"
+            description: "Batch flush error rate is {{ $value | humanizePercentage }}."
+
+        # High batch flush latency
+        - alert: ResyzeAnalyticsBatchFlushSlow
+          expr: |
+            histogram_quantile(0.95, rate(batch_flush_duration_seconds_bucket{job="resyze-analytics"}[5m]))
+            > 5
+          for: 5m
+          labels:
+            severity: warning
+            service: resyze-analytics
+          annotations:
+            summary: "resyze-analytics slow batch flushes"
+            description: "p95 batch flush duration is {{ $value | humanizeDuration }}."

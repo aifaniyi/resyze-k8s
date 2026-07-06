@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resyze-triage-agent
+  namespace: resyze
+  labels:
+    app: resyze-triage-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resyze-triage-agent
+  template:
+    metadata:
+      labels:
+        app: resyze-triage-agent
+    spec:
+      imagePullSecrets:
+        - name: registry-secret
+      containers:
+        - name: resyze-triage-agent
+          image: nexus.aoilabs.net:8443/aifaniyi/resyze-triage-agent:13
+          ports:
+            - containerPort: 8090
+          env:
+            - name: PORT
+              value: "8090"
+
+            # Grafana MCP server (SSE transport)
+            - name: GRAFANA_MCP_URL
+              value: "http://grafana-mcp-server.resyze.svc.cluster.local:8080/sse"
+            - name: GRAFANA_MCP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-mcp-secret
+                  key: GRAFANA_API_KEY
+
+            # LLM provider — set one of these
+            - name: LLM_PROVIDER
+              value: "google" # or "openai"
+            - name: LLM_MODEL
+              value: "gemini-2.5-flash"
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: resyze-triage-agent-secret
+                  key: LLM_API_KEY
+
+            # Mailer integration — send triage results via NATS to resyze-mailer
+            - name: NATS_URL
+              value: "nats://$(NATS_SERVICE_HOST):$(NATS_SERVICE_PORT_CLIENT)"
+            - name: NATS_MAILER_SUBJECT
+              value: "email.events"
+            - name: ALERT_RECIPIENT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: resyze-triage-agent-secret
+                  key: ALERT_RECIPIENT_EMAIL
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: resyze-triage-agent
+  namespace: resyze
+  labels:
+    app: resyze-triage-agent
+spec:
+  selector:
+    app: resyze-triage-agent
+  ports:
+    - name: http
+      port: 8090
+      targetPort: 8090
