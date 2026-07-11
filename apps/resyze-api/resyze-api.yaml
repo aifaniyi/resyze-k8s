@@ -108,9 +108,11 @@ spec:
             - name: ANALYTICS_SERVICE_URL
               value: "http://$(RESYZE_ANALYTICS_SERVICE_HOST):$(RESYZE_ANALYTICS_SERVICE_PORT)"
 
-            # In-memory LRU cache ceiling
+            # Disk cache
+            - name: CACHE_DIR
+              value: "/app/cache"
             - name: CACHE_MAX_SIZE_MB
-              value: "512"
+              value: "3584"
 
             - name: CORS_ALLOWED_ORIGINS
               value: "https://resyze.aoilabs.net"
