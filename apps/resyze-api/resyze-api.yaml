@@ -140,7 +140,7 @@ spec:
               memory: 512Mi
             limits:
               cpu: 1000m
-              memory: 2048Mi
+              memory: 1024Mi
           volumeMounts:
             - name: cache
               mountPath: /app/cache
