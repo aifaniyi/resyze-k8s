@@ -25,7 +25,7 @@ spec:
         - name: registry-secret
       containers:
         - name: resyze-api
-          image: nexus.aoilabs.net:8443/aifaniyi/resyze-api:27
+          image: nexus.aoilabs.net:8443/aifaniyi/resyze-api:28
           ports:
             - containerPort: 8081
           env:
@@ -103,6 +103,10 @@ spec:
               value: "api-email-publisher"
             - name: NATS_EMAIL_DLQ_SUBJECT
               value: "email.events.dlq"
+
+            # vips
+            - name: VIPS_CONCURRENCY
+              value: "2"
 
             # Analytics — resolved from the kubernetes service env vars injected by kubernetes
             - name: ANALYTICS_SERVICE_URL
