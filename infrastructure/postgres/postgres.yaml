@@ -1,3 +1,15 @@
+# ConfigMap with init SQL to enable required extensions.
+# Scripts in /docker-entrypoint-initdb.d/ run on first DB initialization only.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: resyze
+data:
+  init-extensions.sql: |
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+---
 # Persistent volume claim for Postgres data.
 # Uses the default k3s local-path provisioner; replace storageClassName
 # with your preferred class if you have Longhorn or another CSI driver.
@@ -57,6 +69,8 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: postgres-init
+              mountPath: /docker-entrypoint-initdb.d
           # Liveness probe restarts the pod if Postgres stops accepting connections.
           livenessProbe:
             exec:
@@ -74,6 +88,9 @@ spec:
         - name: postgres-data
           persistentVolumeClaim:
             claimName: postgres-pvc
+        - name: postgres-init
+          configMap:
+            name: postgres-init
 
 ---
 # ClusterIP service — Postgres is only reachable inside the cluster.

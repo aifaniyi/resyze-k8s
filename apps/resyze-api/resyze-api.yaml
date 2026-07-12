@@ -25,7 +25,7 @@ spec:
         - name: registry-secret
       containers:
         - name: resyze-api
-          image: nexus.aoilabs.net:8443/aifaniyi/resyze-api:28
+          image: nexus.aoilabs.net:8443/aifaniyi/resyze-api:30
           ports:
             - containerPort: 8081
           env:
