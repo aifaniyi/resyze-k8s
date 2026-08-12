@@ -1,0 +1,53 @@
+# Single-replica Redis deployment for guest session tracking (try-it-out feature).
+# Persistence is intentionally disabled — guest sessions are ephemeral (1hr TTL)
+# and data loss on pod restart is acceptable.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: resyze
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args:
+            - redis-server
+            - --save ""          # Disable RDB snapshots
+            - --appendonly no    # Disable AOF persistence
+          ports:
+            - containerPort: 6379
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+
+---
+# ClusterIP service — Redis is only reachable inside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: resyze
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
