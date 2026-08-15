@@ -104,10 +104,6 @@ spec:
             - name: NATS_EMAIL_DLQ_SUBJECT
               value: "email.events.dlq"
 
-            # Redis — resolved from the kubernetes service env vars injected by kubernetes
-            - name: REDIS_URL
-              value: "redis://$(REDIS_SERVICE_HOST):$(REDIS_SERVICE_PORT)"
-
             # vips
             - name: VIPS_CONCURRENCY
               value: "2"
